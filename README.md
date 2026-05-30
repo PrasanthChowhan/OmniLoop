@@ -18,10 +18,13 @@ You can now run `ai-harness` from any empty directory on your machine!
 
 This harness utilizes a **Ralph-like loop** via a Master Orchestrator script (`src/index.ts`). It is designed to eliminate **context rot** by spinning up fresh AI contexts for every micro-task.
 
-The workflow relies on three specialized personas defined in the `.harness/` folder:
-1. **Planner** (`planner_prompt.md`): Takes a simple goal and expands it into an ambitious `feature_list.json` specification. 
-2. **Generator** (`generator_prompt.md`): Operates in sprints. It picks up the next uncompleted feature from `feature_list.json`, writes a `sprint_contract.md`, writes the code, and commits changes via Git.
-3. **Evaluator** (`evaluator_prompt.md`): The QA phase. It writes automated tests (like Playwright) to test the Generator's work, providing detailed feedback in `sprint_feedback.md` if it fails, or marking the feature as passing.
+The workflow now relies on a two-phase sprint execution utilizing five specialized personas defined in the `.harness/` folder:
+
+1. **Planner** (`planner_prompt.md`): Takes a simple goal and expands it into an ambitious `.harness/feature_list.json` specification, while scaffolding the environment via `.harness/init.sh`.
+2. **Contractor** (`contractor_prompt.md`): The Technical Lead. Picks up the next feature and defines *exactly how* it will be built by writing a `.harness/sprint_contract.md`.
+3. **Contract Evaluator** (`contract_evaluator_prompt.md`): The Architect. Reviews the contract *before* any code is written, ensuring architectural alignment and testability.
+4. **Generator** (`generator_prompt.md`): The Coder. Operates with pure focus to strictly implement the approved contract, then safely commits changes via Git.
+5. **Evaluator** (`evaluator_prompt.md`): The QA phase. Writes automated tests (like Playwright) to test the Generator's work end-to-end, providing detailed feedback in `.harness/sprint_feedback.md` if it fails, or marking the feature as passing.
 
 ## Usage
 
@@ -31,12 +34,35 @@ Run the harness by supplying a single, high-level goal. The Planner will break i
 ai-harness "Build a 2D retro game maker with a level editor and test mode"
 ```
 
-### 2. Bring-Your-Own-Plan (Skip the Planner)
-If you already have a roadmap, you can skip the Planner and jump straight into the Generator/Evaluator loop. You can provide a directory of Markdown issues, or a JSON file.
+### 2. Bring-Your-Own-Plan (Only Ralph Loop)
+If you already have a roadmap or manually created a `.harness/feature_list.json` file, you can skip the Planner and jump straight into the Generator/Evaluator loop (the "Ralph Loop"). 
+
+**Option A: Let the harness parse your markdown issues**
+Provide a directory of Markdown issues, or a JSON file:
 ```bash
 ai-harness --tasks ./issues
 ```
-The orchestrator will seamlessly parse your files into the strict `feature_list.json` format. *(Note: To prevent accidental overwrites, the harness will abort if `feature_list.json` already exists. Use `--force` to override).*
+The orchestrator will seamlessly parse your files into the strict `.harness/feature_list.json` format and start the Ralph Loop. *(Note: To prevent accidental overwrites, the harness will abort if the list already exists. Use `--force` to override).*
+
+**Option B: Resume an existing plan**
+If `.harness/feature_list.json` already exists in your workspace (either manually authored or leftover from a paused run), simply run the command with no arguments to enter the Ralph Loop and pick up the next uncompleted feature:
+```bash
+ai-harness
+```
+
+## CLI Flags Reference
+
+The orchestrator supports several flags to customize its execution and manage state:
+
+| Flag | Description |
+|------|-------------|
+| `--tasks <path>` | Skips the Planner agent. Parses a directory of markdown files or a JSON file to build `.harness/feature_list.json` and begins the Ralph loop. |
+| `--force` | Forces the orchestrator to overwrite an existing `.harness/feature_list.json` when using the `--tasks` flag. |
+| `--no-test` | Bypasses the Evaluator agent entirely during the Ralph Loop. Assume the generator's code is correct, saving time and tokens when rigid UI testing is overkill. |
+| `--context <path>` | Appends an explicit file to the AI's context window. Extremely useful for injecting custom architecture docs or API references for a specific run. |
+| `--resume-from-commit <hash>` | Instantly rolls the project state back to a specific git commit hash before resuming the harness loop. |
+| `--retry-feature <id>` | Marks a previously completed or failed feature (by ID) as `passes: false` in the feature list, forcing the harness to roll back and retry it. |
+| `--docker` | Runs the agent model via a sandboxed Docker container (`docker run gemini`) instead of the default local Node CLI execution. |
 
 ## Context Injection & Progressive Disclosure
 

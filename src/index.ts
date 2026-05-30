@@ -11,10 +11,11 @@ const PROMPTS_DIR = path.join(SCRIPT_DIR, '.harness');
 const HARNESS_DIR = '.harness';
 const TRACES_FILE = path.join(HARNESS_DIR, 'harness_traces.jsonl');
 const METRICS_FILE = path.join(HARNESS_DIR, 'metrics.json');
-const FEATURE_LIST_FILE = 'feature_list.json';
-const SPRINT_CONTRACT = 'sprint_contract.md';
-const FEEDBACK_FILE = 'sprint_feedback.md';
-const HUMAN_ADVICE_FILE = 'human_advice.md';
+const FEATURE_LIST_FILE = path.join(HARNESS_DIR, 'feature_list.json');
+const SPRINT_CONTRACT = path.join(HARNESS_DIR, 'sprint_contract.md');
+const FEEDBACK_FILE = path.join(HARNESS_DIR, 'sprint_feedback.md');
+const HUMAN_ADVICE_FILE = path.join(HARNESS_DIR, 'human_advice.md');
+const CONTRACT_APPROVED_FILE = path.join(HARNESS_DIR, 'contract_approved.txt');
 const MAX_ITERATIONS = 3;
 
 // Ensure harness dir exists locally
@@ -333,6 +334,7 @@ function main() {
   let commitHash = null;
   let retryFeatureId = null;
   let useDocker = false;
+  let skipTest = false;
   
   // New workflow arguments
   let tasksPath: string | null = null;
@@ -351,6 +353,8 @@ function main() {
       globalCustomContextPath = args[++i];
     } else if (args[i] === '--force') {
       forceOverwrite = true;
+    } else if (args[i] === '--no-test') {
+      skipTest = true;
     } else if (!args[i].startsWith('--')) {
       goal = args[i];
     }
@@ -422,13 +426,52 @@ function main() {
 
       checkoutFeatureBranch(featureId);
 
+      // --- Phase 1: Contract Negotiation ---
+      let contractApproved = false;
+      let contractIteration = 0;
+      
+      while (contractIteration < MAX_ITERATIONS && !contractApproved) {
+        contractIteration++;
+        console.log(`\n[*] --- Contract Iteration ${contractIteration}/${MAX_ITERATIONS} ---`);
+        let contractContext = getSurgicalContext(currentFeature);
+        if (fs.existsSync(FEEDBACK_FILE)) {
+          contractContext += `\nContract Feedback:\n${fs.readFileSync(FEEDBACK_FILE, 'utf-8')}\n`;
+        }
+
+        console.log('[*] Running Contractor...');
+        runAgent('contractor_prompt.md', contractContext, `Create a contract for: ${currentFeature.description}`, useDocker, featureId, contractIteration);
+
+        console.log('[*] Running Contract Evaluator...');
+        runAgent('contract_evaluator_prompt.md', contractContext, `Review the contract for: ${currentFeature.description}`, useDocker, featureId, contractIteration);
+
+        if (fs.existsSync(CONTRACT_APPROVED_FILE)) {
+          console.log('[+] Contract approved!');
+          contractApproved = true;
+          fs.unlinkSync(CONTRACT_APPROVED_FILE);
+          if (fs.existsSync(FEEDBACK_FILE)) fs.unlinkSync(FEEDBACK_FILE);
+        } else {
+          console.log(`[-] Contract rejected or missing approval. Retrying...`);
+        }
+      }
+
+      if (!contractApproved) {
+        console.log(`\n[!] WARNING: Feature [${featureId}] failed to negotiate a contract after ${MAX_ITERATIONS} iterations.`);
+        console.log(`[!] Check \`human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+        continue;
+      }
+
+      // --- Phase 2: Implementation ---
       let iteration = 0;
       let featurePassed = false;
       while (iteration < MAX_ITERATIONS) {
         iteration++;
-        console.log(`\n[*] --- Iteration ${iteration}/${MAX_ITERATIONS} ---`);
+        console.log(`\n[*] --- Implementation Iteration ${iteration}/${MAX_ITERATIONS} ---`);
 
         let context = getSurgicalContext(currentFeature);
+        if (fs.existsSync(SPRINT_CONTRACT)) {
+          context += `\nApproved Sprint Contract:\n${fs.readFileSync(SPRINT_CONTRACT, 'utf-8')}\n`;
+        }
         if (fs.existsSync(FEEDBACK_FILE)) {
           context += `\nEvaluator Feedback:\n${fs.readFileSync(FEEDBACK_FILE, 'utf-8')}\n`;
         }
@@ -436,6 +479,22 @@ function main() {
         console.log('[*] Running Generator...');
         const success = runAgent('generator_prompt.md', context, `Focus on this feature: ${currentFeature.description}`, useDocker, featureId, iteration);
         if (success) recordMetric('generator_successes');
+
+        if (skipTest) {
+          console.log(`[+] Skipping evaluation phase for Feature [${featureId}] due to --no-test flag.`);
+          const currentFeatures = loadJson(FEATURE_LIST_FILE);
+          const updatedFeature = (currentFeatures.features || []).find((f: any) => String(f.id) === String(featureId));
+          if (updatedFeature) {
+             updatedFeature.passes = true;
+             saveJson(FEATURE_LIST_FILE, currentFeatures);
+          }
+          if (fs.existsSync(FEEDBACK_FILE)) fs.unlinkSync(FEEDBACK_FILE);
+
+          mergeFeatureBranch(featureId);
+          commitDurableState(`Feature ${featureId} completed and merged (no-test mode)`);
+          featurePassed = true;
+          break;
+        }
 
         if (iteration === 1) {
           console.log('[*] Performing Meta-Evaluation Chaos Test...');
