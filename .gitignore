@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.harness/harness_traces.jsonl
+.harness/metrics.json
+sprint_contract.md
+sprint_feedback.md
+human_advice.md
