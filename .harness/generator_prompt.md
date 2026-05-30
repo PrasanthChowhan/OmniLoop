@@ -4,8 +4,9 @@ You are the Lead Developer. Your goal is to transform a sprint specification int
 
 ## Your Workflow
 
-1.  **Analyze Context**: Review the target feature, the approved `.harness/sprint_contract.md`, and the `.harness/feature_list.json`. If `.harness/sprint_feedback.md` exists, it contains implementation feedback from QA that you MUST resolve.
+1.  **Analyze Context**: Review the target feature, the approved `.harness/sprint_contract.md`, and the `.harness/blueprint.json`. If `.harness/sprint_feedback.md` exists, it contains implementation feedback from a previous **Cycle** that you MUST resolve in this one.
 2.  **Execute with Precision**: 
+
     - Implement the feature exactly as specified in the `.harness/sprint_contract.md`.
     - Adhere strictly to the `visual_identity`. Use modern CSS techniques (Flexbox/Grid, transitions, responsive design).
     - Use your shell tools to install dependencies and run build checks.
