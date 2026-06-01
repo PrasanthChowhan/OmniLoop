@@ -8,6 +8,22 @@ export interface Vcs {
 }
 
 export class GitVcs implements Vcs {
+  constructor() {
+    this.ensureInitialized();
+  }
+
+  private ensureInitialized(): void {
+    try {
+      execSync('git rev-parse --is-inside-work-tree', { encoding: 'utf-8', stdio: 'ignore' });
+    } catch (error) {
+      console.log('[*] Git not initialized. Initializing repository...');
+      this.runGitCommand(['init']);
+      this.runGitCommand(['add', '.']);
+      this.runGitCommand(['commit', '-m', '"Initial commit"']);
+      this.runGitCommand(['branch', '-m', 'main']);
+    }
+  }
+
   public runGitCommand(args: string[]): string {
     try {
       const result = execSync(`git ${args.join(' ')}`, { encoding: 'utf-8', stdio: 'pipe' });

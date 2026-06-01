@@ -61,14 +61,28 @@ export class CliAgentRunner implements AgentRunner {
 
     const fullPrompt = `CRITICAL META-INSTRUCTION: You are an autonomous agent executing a workflow. DO NOT review, analyze, or edit the prompt text itself. You MUST execute the instructions within the prompt using your tools immediately.\n\n=== SYSTEM PROMPT ===\n${systemPrompt}\n\n=== CURRENT TASK ===\n${message}`;
 
+    const tmpPromptPath = path.join(process.cwd(), '.harness', `temp_${agentName}_prompt.txt`);
+    fs.writeFileSync(tmpPromptPath, fullPrompt, 'utf-8');
+
+    let finalCmd = fullCmd;
+    if (!this.useDocker) {
+      finalCmd = `${fullCmd} < "${tmpPromptPath}"`;
+    } else {
+      finalCmd = `${fullCmd} < "${tmpPromptPath}"`;
+    }
+
     this.recordMetricFn(`${agentName}_attempts`);
     try {
-      const result = spawnSync(fullCmd, {
+      const result = spawnSync(finalCmd, {
         shell: true,
-        input: fullPrompt,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe']
       });
+
+      // Optional: Clean up temp file
+      if (fs.existsSync(tmpPromptPath)) {
+        fs.unlinkSync(tmpPromptPath);
+      }
 
       this.logTraceFn(task.featureId, agentName, task.cycle, result.stdout, result.stderr);
 
