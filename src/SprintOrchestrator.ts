@@ -17,6 +17,7 @@ export interface SprintDependencies {
   skipTest: boolean;
   injectBug: () => string | null;
   revertBug: (target: string | null) => void;
+  mode: string;
 }
 
 export class SprintOrchestrator {
@@ -33,14 +34,22 @@ export class SprintOrchestrator {
     console.log(`[*] Sprint: [${featureId}] ${feature.description}`);
     console.log(`[*] ----------------------------------------------------`);
 
-    vcs.checkoutFeatureBranch(featureId);
+    if (this.deps.mode !== 'ralph') {
+      vcs.checkoutFeatureBranch(featureId);
+    } else {
+      console.log(`[*] Ralph Mode: Operating on current branch (Work Agnostic).`);
+    }
 
     // --- Phase 1: Contract Negotiation ---
     let contractApproved = false;
     let contractCycle = 0;
     
-    while (contractCycle < maxCycles && !contractApproved) {
-      contractCycle++;
+    if (this.deps.mode === 'ralph') {
+      console.log('\n[*] Ralph Mode selected. Skipping Contract Negotiation (Phase 1).');
+      contractApproved = true;
+    } else {
+      while (contractCycle < maxCycles && !contractApproved) {
+        contractCycle++;
       console.log(`\n[*] --- Contract Cycle ${contractCycle}/${maxCycles} ---`);
       let contractContext = contextSynthesizer.getSurgicalContext(feature);
       if (fs.existsSync(workspace.feedbackFile)) {
@@ -79,6 +88,7 @@ export class SprintOrchestrator {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
       return false;
     }
+    }
 
     // --- Phase 2: Implementation ---
     let cycle = 0;
@@ -112,19 +122,21 @@ export class SprintOrchestrator {
         blueprint.markFeaturePassed(featureId);
         if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
 
-        vcs.mergeFeatureBranch(featureId, feature.description);
+        if (this.deps.mode !== 'ralph') {
+          vcs.mergeFeatureBranch(featureId, feature.description);
+        }
         const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
-        vcs.commitDurableState(`Feature ${featureId} completed and merged (no-test mode)${desc}`, [workspace.blueprintFile]);
+        vcs.commitDurableState(`Feature ${featureId} completed${this.deps.mode !== 'ralph' ? ' and merged' : ''} (no-test mode)${desc}`, [workspace.blueprintFile]);
         
         const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
-        if (updatedFeature && updatedFeature.githubIssueNumber && updatedFeature.githubRepo) {
-          await featureSource.closeIssue(updatedFeature.githubRepo, updatedFeature.githubIssueNumber);
+        if (updatedFeature) {
+          await featureSource.markFeatureComplete(updatedFeature);
         }
         featurePassed = true;
         break;
       }
 
-      if (cycle === 1) {
+      if (cycle === 1 && this.deps.mode !== 'ralph') {
         console.log('[*] Performing Meta-Evaluation Chaos Test...');
         const bugFile = injectBug();
         if (bugFile) {
@@ -171,11 +183,13 @@ export class SprintOrchestrator {
         workspace.recordMetric('evaluator_successes');
         if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
 
-        vcs.mergeFeatureBranch(featureId, feature.description);
+        if (this.deps.mode !== 'ralph') {
+          vcs.mergeFeatureBranch(featureId, feature.description);
+        }
         const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
-        vcs.commitDurableState(`Feature ${featureId} completed and merged${desc}`, [workspace.blueprintFile]);
-        if (updatedFeature.githubIssueNumber && updatedFeature.githubRepo) {
-          await featureSource.closeIssue(updatedFeature.githubRepo, updatedFeature.githubIssueNumber);
+        vcs.commitDurableState(`Feature ${featureId} completed${this.deps.mode !== 'ralph' ? ' and merged' : ''}${desc}`, [workspace.blueprintFile]);
+        if (updatedFeature) {
+          await featureSource.markFeatureComplete(updatedFeature);
         }
         featurePassed = true;
         break;

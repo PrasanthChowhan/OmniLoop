@@ -4,8 +4,7 @@ export interface Feature {
   id: string;
   description: string;
   passes: boolean;
-  githubIssueNumber?: number;
-  githubRepo?: string;
+  sourceContext?: Record<string, any>;
 }
 
 export interface BlueprintRepository {

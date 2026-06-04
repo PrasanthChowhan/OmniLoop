@@ -74,7 +74,7 @@ export class ContextSynthesizer {
     }
 
     if (hasCtags) {
-      const recentFiles = this.vcs.runGitCommand(['diff', 'main', '--name-only']).split('\n');
+      const recentFiles = this.vcs.getChangedFilesFromBase();
       let tagsOut = '';
       for (const rf of recentFiles) {
         if (rf && fs.existsSync(rf) && (rf.endsWith('.py') || rf.endsWith('.js') || rf.endsWith('.ts'))) {
@@ -88,12 +88,12 @@ export class ContextSynthesizer {
         appendContext('Relevant Symbols (CTAGS)', tagsOut, 8000);
       }
     } else {
-      const recentCommits = this.vcs.runGitCommand(['log', '--oneline', '-n', '3']);
+      const recentCommits = this.vcs.getRecentCommitHistory(3);
       if (recentCommits) {
         context += `Recent Git History:\n${recentCommits}\n\n`;
       }
       // V2 FIX: Use diff --stat instead of full raw diff
-      const diffStat = this.vcs.runGitCommand(['diff', 'main', '--stat']);
+      const diffStat = this.vcs.getDiffStatFromBase();
       if (diffStat) {
         context += `Changes in this feature branch (Diff Stat):\n${diffStat}\n\n`;
       }

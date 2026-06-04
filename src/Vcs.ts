@@ -1,10 +1,16 @@
 import { execSync } from 'child_process';
 
 export interface Vcs {
-  runGitCommand(args: string[]): string;
   checkoutFeatureBranch(featureId: string): void;
   mergeFeatureBranch(featureId: string, featureDescription?: string): void;
   commitDurableState(message: string, files: string[]): void;
+
+  getRemoteOriginUrl(): string | null;
+  checkoutCommit(commitHash: string): void;
+  getChangedFilesFromBase(): string[];
+  getRecentCommitHistory(count: number): string;
+  getDiffStatFromBase(): string;
+  discardUncommittedChanges(): void;
 }
 
 export class GitVcs implements Vcs {
@@ -24,7 +30,7 @@ export class GitVcs implements Vcs {
     }
   }
 
-  public runGitCommand(args: string[]): string {
+  private runGitCommand(args: string[]): string {
     try {
       const result = execSync(`git ${args.join(' ')}`, { encoding: 'utf-8', stdio: 'pipe' });
       return result.trim();
@@ -65,5 +71,31 @@ export class GitVcs implements Vcs {
       this.runGitCommand(['add', file]);
     }
     this.runGitCommand(['commit', '-m', `"${message}"`]);
+  }
+
+  public getRemoteOriginUrl(): string | null {
+    const url = this.runGitCommand(['remote', 'get-url', 'origin']);
+    return url || null;
+  }
+
+  public checkoutCommit(commitHash: string): void {
+    this.runGitCommand(['checkout', commitHash]);
+  }
+
+  public getChangedFilesFromBase(): string[] {
+    return this.runGitCommand(['diff', 'main', '--name-only']).split('\n').filter(Boolean);
+  }
+
+  public getRecentCommitHistory(count: number): string {
+    return this.runGitCommand(['log', '--oneline', '-n', count.toString()]);
+  }
+
+  public getDiffStatFromBase(): string {
+    return this.runGitCommand(['diff', 'main', '--stat']);
+  }
+
+  public discardUncommittedChanges(): void {
+    this.runGitCommand(['checkout', '--', '.']); // Revert tracked files
+    this.runGitCommand(['clean', '-fd']); // Remove untracked files
   }
 }

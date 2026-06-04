@@ -27,6 +27,7 @@ async function main() {
   let forceOverwrite = false;
   let useGithub = false;
   let globalCustomContextPath: string | null = null;
+  let mode = 'omniloop';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--resume-from-commit') {
@@ -45,6 +46,8 @@ async function main() {
       forceOverwrite = true;
     } else if (args[i] === '--no-test') {
       skipTest = true;
+    } else if (args[i] === '--mode') {
+      mode = args[++i];
     } else if (!args[i].startsWith('--')) {
       goal = args[i];
     }
@@ -55,8 +58,9 @@ async function main() {
   const blueprint = new JsonBlueprintRepository(workspace.blueprintFile);
   const contextSynthesizer = new ContextSynthesizer(vcs, workspace.humanAdviceFile, globalCustomContextPath);
   
+  const actualPromptsDir = mode === 'ralph' ? path.join(PROMPTS_DIR, 'ralph') : PROMPTS_DIR;
   const agentRunner = new CliAgentRunner(
-    PROMPTS_DIR, 
+    actualPromptsDir, 
     useDocker, 
     workspace.recordMetric.bind(workspace), 
     workspace.logTrace.bind(workspace)
@@ -71,7 +75,7 @@ async function main() {
 
   if (commitHash) {
     console.log(`[*] Checking out commit ${commitHash}...`);
-    vcs.runGitCommand(['checkout', commitHash]);
+    vcs.checkoutCommit(commitHash);
   }
 
   if (retryFeatureId) {
@@ -127,7 +131,7 @@ async function main() {
   }
 
   function injectBug(): string | null {
-    const recentFiles = vcs.runGitCommand(['diff', 'main', '--name-only']).split('\n');
+    const recentFiles = vcs.getChangedFilesFromBase();
     let target = null;
     for (const f of recentFiles) {
       if (f && fs.existsSync(f) && (f.endsWith('.py') || f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.html') || f.endsWith('.css'))) {
@@ -143,8 +147,7 @@ async function main() {
   }
 
   function revertBug(target: string | null): void {
-    if (!target || !fs.existsSync(target)) return;
-    vcs.runGitCommand(['checkout', '--', target]);
+    vcs.discardUncommittedChanges();
   }
 
   const sprintDeps: SprintDependencies = {
@@ -157,7 +160,8 @@ async function main() {
     maxCycles: MAX_CYCLES,
     skipTest,
     injectBug,
-    revertBug
+    revertBug,
+    mode
   };
 
   const orchestrator = new SprintOrchestrator(sprintDeps);

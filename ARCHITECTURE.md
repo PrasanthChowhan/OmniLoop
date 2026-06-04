@@ -33,7 +33,7 @@ To achieve this, the omniloop separates concerns across a GAN-inspired (Generati
 **Why:** Each context window starts fresh (context resets). The agent needs to quickly understand what happened previously without a massive context history overhead.
 **How:** We maintain durable artifacts:
 - `.omniloop/blueprint.json`: The source of truth for all **Project** requirements and **Sprint** states.
-- `.omniloop/claude-progress.txt`: A living log of what has been done.
+- `.omniloop/omniloop-progress.txt`: A living log of what has been done.
 - **VCS Commit History:** Provides exact code diffs and rollback capabilities if an agent goes off the rails.
 
 ## Architecture & Agent Personas
@@ -56,7 +56,7 @@ To achieve this, the omniloop separates concerns across a GAN-inspired (Generati
 ### 4. Generator Agent (`.omniloop/generator_prompt.md`)
 - **Role:** The Craftsman (Lead Developer).
 - **Task:** Implements the **Feature** exactly as specified in the approved **Contract**. Focuses on code quality, type safety, and UI fidelity.
-- **Output:** Commits code to the **VCS**, appends progress to `claude-progress.txt`.
+- **Output:** Commits code to the **VCS**, appends progress to `omniloop-progress.txt`.
 
 ### 5. Evaluator Agent (`.omniloop/evaluator_prompt.md`)
 - **Role:** The Critic & Guardian (Head of QA and Design).

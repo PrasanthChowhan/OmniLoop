@@ -6,7 +6,7 @@ import { Workspace } from './Workspace';
 
 export interface FeatureSource {
   fetchFeatures(forceOverwrite: boolean): Promise<Feature[]>;
-  closeIssue(repo: string, issueNumber: number): Promise<void>;
+  markFeatureComplete(feature: Feature): Promise<void>;
 }
 
 export class GitHubFeatureSource implements FeatureSource {
@@ -19,7 +19,7 @@ export class GitHubFeatureSource implements FeatureSource {
     }
 
     console.log('[*] Inferring repository from git remote origin...');
-    const remoteUrl = this.vcs.runGitCommand(['remote', 'get-url', 'origin']);
+    const remoteUrl = this.vcs.getRemoteOriginUrl();
     if (!remoteUrl) {
       throw new Error('Failed to get git remote origin URL.');
     }
@@ -57,14 +57,23 @@ export class GitHubFeatureSource implements FeatureSource {
       id: (index + 1).toString(),
       description: `Issue #${issue.number}: ${issue.title}\n\n${issue.body || ''}`,
       passes: false,
-      githubIssueNumber: issue.number,
-      githubRepo: `${owner}/${repo}`
+      sourceContext: {
+        issueNumber: issue.number,
+        repo: `${owner}/${repo}`
+      }
     }));
   }
 
-  public async closeIssue(repo: string, issueNumber: number): Promise<void> {
+  public async markFeatureComplete(feature: Feature): Promise<void> {
     const ghToken = process.env.GH_TOKEN;
     if (!ghToken) return;
+
+    if (!feature.sourceContext || !feature.sourceContext.repo || !feature.sourceContext.issueNumber) {
+      return;
+    }
+
+    const repo = feature.sourceContext.repo;
+    const issueNumber = feature.sourceContext.issueNumber;
 
     console.log(`[*] Closing GitHub issue #${issueNumber} on ${repo}...`);
     try {
@@ -148,7 +157,7 @@ export class FileSystemFeatureSource implements FeatureSource {
     return features;
   }
 
-  public async closeIssue(repo: string, issueNumber: number): Promise<void> {
+  public async markFeatureComplete(feature: Feature): Promise<void> {
     // No-op for file system tasks
   }
 }
