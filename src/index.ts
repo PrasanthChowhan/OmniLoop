@@ -30,7 +30,32 @@ async function main() {
   let mode = 'omniloop';
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--resume-from-commit') {
+    if (args[i] === '--help' || args[i] === '-h') {
+      console.log(`
+OmniLoop - A prompt-driven, work-agnostic orchestrator
+
+Usage:
+  omniloop [goal] [options]
+
+Options:
+  --help, -h                Show this help message
+  --mode <mode>             Set the execution mode (e.g., 'ralph', 'omniloop')
+  --github                  Fetch open GitHub issues and plan them
+  --tasks <path>            Read task definitions from the specified folder/file
+  --context <path>          Provide a custom context file
+  --docker                  Run agents inside a Docker container
+  --force                   Overwrite existing blueprint.json if present
+  --no-test                 Skip the Evaluator verification phase
+  --resume-from-commit <id> Checkout a specific commit before running
+  --retry-feature <id>      Rollback and retry a specific feature ID
+
+Examples:
+  omniloop "Organize the codebase" --mode ralph
+  omniloop --github --mode ralph
+  omniloop --tasks ./backlog --mode ralph
+      `);
+      process.exit(0);
+    } else if (args[i] === '--resume-from-commit') {
       commitHash = args[++i];
     } else if (args[i] === '--retry-feature') {
       retryFeatureId = args[++i];
