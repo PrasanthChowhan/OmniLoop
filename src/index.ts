@@ -9,7 +9,7 @@ import { SprintOrchestrator, SprintDependencies } from './SprintOrchestrator';
 import { Workspace } from './Workspace';
 import { GitVcs } from './Vcs';
 import { ContextSynthesizer } from './ContextSynthesizer';
-import { GitHubFeatureSource, FileSystemFeatureSource, FeatureSource } from './FeatureSource';
+import { extractXmlTag } from './StructuredOutput';
 
 const SCRIPT_DIR = path.resolve(__dirname, '..');
 const PROMPTS_DIR = path.join(SCRIPT_DIR, '.omniloop');
@@ -66,13 +66,6 @@ async function main() {
     workspace.logTrace.bind(workspace)
   );
 
-  let featureSource: FeatureSource;
-  if (useGithub) {
-    featureSource = new GitHubFeatureSource(vcs);
-  } else {
-    featureSource = new FileSystemFeatureSource(tasksPath || '', workspace);
-  }
-
   if (commitHash) {
     console.log(`[*] Checking out commit ${commitHash}...`);
     vcs.checkoutCommit(commitHash);
@@ -83,27 +76,51 @@ async function main() {
     vcs.commitDurableState(`Rollback to retry feature ${retryFeatureId}`, [workspace.blueprintFile]);
   }
 
-  // Handle tasks workflow or planner workflow
-  if (useGithub || tasksPath) {
-    if (fs.existsSync(workspace.blueprintFile) && !forceOverwrite) {
-      console.error('[-] blueprint.json already exists! Aborting to prevent overwrite. Use --force to overwrite.');
+  // Handle planner workflow
+  if (!fs.existsSync(workspace.blueprintFile)) {
+    if (!goal.trim() && !useGithub && !tasksPath) {
+      console.log('[-] No blueprint.json found. You must provide a goal, --github, or --tasks.');
       process.exit(1);
     }
-    const features = await featureSource.fetchFeatures(forceOverwrite);
-    blueprint.saveFeatures(features);
-    vcs.commitDurableState(`Generated blueprint.json from ${useGithub ? 'GitHub' : tasksPath}`, [workspace.blueprintFile]);
-    console.log(`[+] Generated ${features.length} features.`);
-  } else if (!fs.existsSync(workspace.blueprintFile)) {
-    if (!goal) {
-      console.log('[-] No blueprint.json found. You must provide a goal or use --tasks.');
-      process.exit(1);
+
+    let templateInjections = '';
+    if (useGithub) {
+      templateInjections += "\n<github-issues>\n!`gh issue list --state open --json number,title,body`\n</github-issues>\n";
+    }
+    if (tasksPath) {
+      templateInjections += `\n<task-files>\n!\`cat ${tasksPath}/*.md || cat ${tasksPath}/*.txt || echo "No text files found in ${tasksPath}"\`\n</task-files>\n`;
     }
 
     console.log('[*] Running Planner...');
-    agentRunner.runAgent('planner', { contextStr: '' }, { goal, featureId: 'init', cycle: 0 });
+    const result = agentRunner.runAgent('planner', { contextStr: '' }, { 
+      goal, 
+      featureId: 'init', 
+      cycle: 0, 
+      promptArgs: { TASK_DESCRIPTION: goal },
+      templateInjections
+    });
 
-    if (!fs.existsSync(workspace.blueprintFile)) {
-      console.log('[-] Planner failed. Exiting.');
+    if (!result.success) {
+      console.log('[-] Planner failed to execute. Exiting.');
+      process.exit(1);
+    }
+
+    const planJsonStr = extractXmlTag(result.output, 'plan');
+    if (!planJsonStr) {
+      console.log('[-] Planner did not output a valid <plan> tag. Exiting.');
+      console.log(`Raw output: ${result.output}`);
+      process.exit(1);
+    }
+    
+    try {
+      const plan = JSON.parse(planJsonStr);
+      if (plan.features && Array.isArray(plan.features)) {
+        blueprint.saveFeatures(plan.features);
+      } else {
+        throw new Error('Invalid plan format: missing features array');
+      }
+    } catch (e: any) {
+      console.log(`[-] Failed to parse planner output: ${e.message}`);
       process.exit(1);
     }
 
@@ -156,7 +173,6 @@ async function main() {
     workspace,
     vcs,
     contextSynthesizer,
-    featureSource,
     maxCycles: MAX_CYCLES,
     skipTest,
     injectBug,

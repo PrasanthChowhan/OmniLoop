@@ -4,7 +4,6 @@ import { AgentRunner } from './AgentRunner';
 import { Workspace } from './Workspace';
 import { Vcs } from './Vcs';
 import { ContextSynthesizer } from './ContextSynthesizer';
-import { FeatureSource } from './FeatureSource';
 
 export interface SprintDependencies {
   blueprint: BlueprintRepository;
@@ -12,7 +11,6 @@ export interface SprintDependencies {
   workspace: Workspace;
   vcs: Vcs;
   contextSynthesizer: ContextSynthesizer;
-  featureSource: FeatureSource;
   maxCycles: number;
   skipTest: boolean;
   injectBug: () => string | null;
@@ -25,7 +23,7 @@ export class SprintOrchestrator {
 
   async runSprint(feature: Feature): Promise<boolean> {
     const {
-      blueprint, agentRunner, workspace, vcs, contextSynthesizer, featureSource,
+      blueprint, agentRunner, workspace, vcs, contextSynthesizer,
       maxCycles, skipTest, injectBug, revertBug
     } = this.deps;
 
@@ -109,11 +107,18 @@ export class SprintOrchestrator {
         context += `\nEvaluator Feedback:\n${truncatedFeedback}\n`;
       }
 
+      const promptArgs = {
+        TASK_DESCRIPTION: feature.description,
+        CUSTOM_SYSTEM_PROMPT: feature.customSystemPrompt || '',
+        CONTEXT: context,
+        FEEDBACK: fs.existsSync(workspace.feedbackFile) ? fs.readFileSync(workspace.feedbackFile, 'utf-8') : 'No previous feedback.'
+      };
+
       console.log('[*] Running Generator...');
       const success = agentRunner.runAgent(
         'generator',
         { contextStr: context },
-        { goal: `Focus on this feature: ${feature.description}`, featureId, cycle }
+        { goal: `Focus on this feature: ${feature.description}`, featureId, cycle, promptArgs }
       );
       if (success) workspace.recordMetric('generator_successes');
 
@@ -129,9 +134,6 @@ export class SprintOrchestrator {
         vcs.commitDurableState(`Feature ${featureId} completed${this.deps.mode !== 'ralph' ? ' and merged' : ''} (no-test mode)${desc}`, [workspace.blueprintFile]);
         
         const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
-        if (updatedFeature) {
-          await featureSource.markFeatureComplete(updatedFeature);
-        }
         featurePassed = true;
         break;
       }
@@ -143,7 +145,7 @@ export class SprintOrchestrator {
           agentRunner.runAgent(
             'evaluator',
             { contextStr: context },
-            { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle }
+            { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs }
           );
           
           const postChaosFeat = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
@@ -173,7 +175,7 @@ export class SprintOrchestrator {
       agentRunner.runAgent(
         'evaluator',
         { contextStr: context },
-        { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle }
+        { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs }
       );
 
       const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
@@ -188,9 +190,6 @@ export class SprintOrchestrator {
         }
         const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
         vcs.commitDurableState(`Feature ${featureId} completed${this.deps.mode !== 'ralph' ? ' and merged' : ''}${desc}`, [workspace.blueprintFile]);
-        if (updatedFeature) {
-          await featureSource.markFeatureComplete(updatedFeature);
-        }
         featurePassed = true;
         break;
       } else {

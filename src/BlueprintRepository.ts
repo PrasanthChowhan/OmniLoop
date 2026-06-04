@@ -5,6 +5,7 @@ export interface Feature {
   description: string;
   passes: boolean;
   sourceContext?: Record<string, any>;
+  customSystemPrompt?: string;
 }
 
 export interface BlueprintRepository {
