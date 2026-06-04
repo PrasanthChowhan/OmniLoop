@@ -1,11 +1,11 @@
 # Ubiquitous Language
 
-This document defines the core domain language for the AI Harness. All code, documentation, and agent prompts must strictly adhere to these terms.
+This document defines the core domain language for the AI OmniLoop. All code, documentation, and agent prompts must strictly adhere to these terms.
 
 ## Core Concepts
 
-- **Harness**: The orchestrator system (this codebase) that manages the autonomous development lifecycle.
-- **Project**: The external codebase that the Harness is currently operating on.
+- **OmniLoop**: The orchestrator system (this codebase) that manages the autonomous development lifecycle.
+- **Project**: The external codebase that the OmniLoop is currently operating on.
 - **Feature**: A discrete, atomic unit of requirement or a bug fix (formerly "Issue" or "Task").
 - **Blueprint**: The source of truth for all Features in a project, including their status and metadata (formerly `feature_list.json`).
 - **Sprint**: The end-to-end execution lifecycle for a single **Feature**, from contract negotiation to final merge.
@@ -14,7 +14,7 @@ This document defines the core domain language for the AI Harness. All code, doc
 - **Blueprint Repository**: The persistent storage and management logic for the **Blueprint**.
 - **Feature Source**: An external system (GitHub, File System) from which **Features** are ingested into the **Blueprint**.
 - **VCS (Version Control System)**: The abstraction for managing the **Project's** source control (formerly `Scm`).
-- **Agent**: A specialized LLM persona (Planner, Contractor, Generator, etc.) performing a role within the **Harness**.
+- **Agent**: A specialized LLM persona (Planner, Contractor, Generator, etc.) performing a role within the **OmniLoop**.
 
 ## Personas (Agents)
 

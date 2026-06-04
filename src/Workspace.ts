@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 export class Workspace {
-  public readonly harnessDir: string = '.harness';
+  public readonly omniloopDir: string = '.omniloop';
   public readonly tracesFile: string;
   public readonly metricsFile: string;
   public readonly blueprintFile: string;
@@ -13,21 +13,21 @@ export class Workspace {
   public readonly contractApprovedFile: string;
 
   constructor(private rootDir: string = process.cwd()) {
-    this.tracesFile = path.join(this.harnessDir, 'harness_traces.jsonl');
-    this.metricsFile = path.join(this.harnessDir, 'metrics.json');
-    this.blueprintFile = path.join(this.harnessDir, 'blueprint.json');
-    this.sprintContractFile = path.join(this.harnessDir, 'sprint_contract.md');
-    this.sprintInitFile = path.join(this.harnessDir, 'init.sh');
-    this.feedbackFile = path.join(this.harnessDir, 'sprint_feedback.md');
-    this.humanAdviceFile = path.join(this.harnessDir, 'human_advice.md');
-    this.contractApprovedFile = path.join(this.harnessDir, 'contract_approved.txt');
+    this.tracesFile = path.join(this.omniloopDir, 'omniloop_traces.jsonl');
+    this.metricsFile = path.join(this.omniloopDir, 'metrics.json');
+    this.blueprintFile = path.join(this.omniloopDir, 'blueprint.json');
+    this.sprintContractFile = path.join(this.omniloopDir, 'sprint_contract.md');
+    this.sprintInitFile = path.join(this.omniloopDir, 'init.sh');
+    this.feedbackFile = path.join(this.omniloopDir, 'sprint_feedback.md');
+    this.humanAdviceFile = path.join(this.omniloopDir, 'human_advice.md');
+    this.contractApprovedFile = path.join(this.omniloopDir, 'contract_approved.txt');
 
-    this.ensureHarnessDir();
+    this.ensureOmniLoopDir();
   }
 
-  private ensureHarnessDir(): void {
-    if (!fs.existsSync(this.harnessDir)) {
-      fs.mkdirSync(this.harnessDir, { recursive: true });
+  private ensureOmniLoopDir(): void {
+    if (!fs.existsSync(this.omniloopDir)) {
+      fs.mkdirSync(this.omniloopDir, { recursive: true });
     }
   }
 

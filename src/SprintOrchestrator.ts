@@ -44,7 +44,9 @@ export class SprintOrchestrator {
       console.log(`\n[*] --- Contract Cycle ${contractCycle}/${maxCycles} ---`);
       let contractContext = contextSynthesizer.getSurgicalContext(feature);
       if (fs.existsSync(workspace.feedbackFile)) {
-        contractContext += `\nContract Feedback:\n${fs.readFileSync(workspace.feedbackFile, 'utf-8')}\n`;
+        const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
+        const truncatedFeedback = feedback.length > 5000 ? feedback.substring(0, 5000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : feedback;
+        contractContext += `\nContract Feedback:\n${truncatedFeedback}\n`;
       }
 
       console.log('[*] Running Contractor...');
@@ -87,10 +89,14 @@ export class SprintOrchestrator {
 
       let context = contextSynthesizer.getSurgicalContext(feature);
       if (fs.existsSync(workspace.sprintContractFile)) {
-        context += `\nApproved Sprint Contract:\n${fs.readFileSync(workspace.sprintContractFile, 'utf-8')}\n`;
+        const contract = fs.readFileSync(workspace.sprintContractFile, 'utf-8');
+        const truncatedContract = contract.length > 8000 ? contract.substring(0, 8000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : contract;
+        context += `\nApproved Sprint Contract:\n${truncatedContract}\n`;
       }
       if (fs.existsSync(workspace.feedbackFile)) {
-        context += `\nEvaluator Feedback:\n${fs.readFileSync(workspace.feedbackFile, 'utf-8')}\n`;
+        const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
+        const truncatedFeedback = feedback.length > 5000 ? feedback.substring(0, 5000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : feedback;
+        context += `\nEvaluator Feedback:\n${truncatedFeedback}\n`;
       }
 
       console.log('[*] Running Generator...');
@@ -106,8 +112,9 @@ export class SprintOrchestrator {
         blueprint.markFeaturePassed(featureId);
         if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
 
-        vcs.mergeFeatureBranch(featureId);
-        vcs.commitDurableState(`Feature ${featureId} completed and merged (no-test mode)`, [workspace.blueprintFile]);
+        vcs.mergeFeatureBranch(featureId, feature.description);
+        const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
+        vcs.commitDurableState(`Feature ${featureId} completed and merged (no-test mode)${desc}`, [workspace.blueprintFile]);
         
         const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
         if (updatedFeature && updatedFeature.githubIssueNumber && updatedFeature.githubRepo) {
@@ -164,8 +171,9 @@ export class SprintOrchestrator {
         workspace.recordMetric('evaluator_successes');
         if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
 
-        vcs.mergeFeatureBranch(featureId);
-        vcs.commitDurableState(`Feature ${featureId} completed and merged`, [workspace.blueprintFile]);
+        vcs.mergeFeatureBranch(featureId, feature.description);
+        const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
+        vcs.commitDurableState(`Feature ${featureId} completed and merged${desc}`, [workspace.blueprintFile]);
         if (updatedFeature.githubIssueNumber && updatedFeature.githubRepo) {
           await featureSource.closeIssue(updatedFeature.githubRepo, updatedFeature.githubIssueNumber);
         }

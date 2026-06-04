@@ -3,7 +3,7 @@ import { execSync } from 'child_process';
 export interface Vcs {
   runGitCommand(args: string[]): string;
   checkoutFeatureBranch(featureId: string): void;
-  mergeFeatureBranch(featureId: string): void;
+  mergeFeatureBranch(featureId: string, featureDescription?: string): void;
   commitDurableState(message: string, files: string[]): void;
 }
 
@@ -47,15 +47,16 @@ export class GitVcs implements Vcs {
     }
   }
 
-  public mergeFeatureBranch(featureId: string): void {
+  public mergeFeatureBranch(featureId: string, featureDescription: string = ''): void {
     const branchName = `feature_${featureId}`;
+    const desc = featureDescription ? `: ${featureDescription.replace(/"/g, '\\"')}` : '';
     
     // Auto-commit any lingering files the Generator forgot to commit
     this.runGitCommand(['add', '-A']);
-    this.runGitCommand(['commit', '-m', `"Auto-commit generated code for feature ${featureId}"`]);
+    this.runGitCommand(['commit', '-m', `"Auto-commit generated code for feature ${featureId}${desc}"`]);
 
     this.runGitCommand(['checkout', 'main']);
-    this.runGitCommand(['merge', '--no-ff', branchName, '-m', `"Merge feature ${featureId}"`]);
+    this.runGitCommand(['merge', '--no-ff', branchName, '-m', `"Merge feature ${featureId}${desc}"`]);
     this.runGitCommand(['branch', '-d', branchName]);
   }
 

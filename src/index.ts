@@ -12,7 +12,7 @@ import { ContextSynthesizer } from './ContextSynthesizer';
 import { GitHubFeatureSource, FileSystemFeatureSource, FeatureSource } from './FeatureSource';
 
 const SCRIPT_DIR = path.resolve(__dirname, '..');
-const PROMPTS_DIR = path.join(SCRIPT_DIR, '.harness');
+const PROMPTS_DIR = path.join(SCRIPT_DIR, '.omniloop');
 const MAX_CYCLES = 3;
 
 async function main() {
@@ -174,7 +174,7 @@ async function main() {
       const success = await orchestrator.runSprint(currentFeature);
     }
   } catch (err: any) {
-    console.log("\n\n[!] Harness paused by user. Use human_advice.md to steer the agent on resume.");
+    console.log("\n\n[!] OmniLoop paused by user. Use human_advice.md to steer the agent on resume.");
     process.exit(0);
   }
 }

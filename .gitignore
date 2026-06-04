@@ -1,7 +1,7 @@
 node_modules/
 dist/
-.harness/harness_traces.jsonl
-.harness/metrics.json
+.omniloop/omniloop_traces.jsonl
+.omniloop/metrics.json
 sprint_contract.md
 sprint_feedback.md
 human_advice.md

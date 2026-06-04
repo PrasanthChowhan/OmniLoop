@@ -1,10 +1,10 @@
 {
-  "name": "ai-harness",
+  "name": "omniloop",
   "version": "1.0.0",
-  "description": "Long-Running AI Harness Orchestrator",
+  "description": "OmniLoop Orchestrator",
   "main": "dist/index.js",
   "bin": {
-    "ai-harness": "./dist/index.js"
+    "omniloop": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

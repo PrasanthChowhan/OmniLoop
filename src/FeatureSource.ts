@@ -40,7 +40,7 @@ export class GitHubFeatureSource implements FeatureSource {
       headers: {
         'Authorization': `Bearer ${ghToken}`,
         'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'ai-harness'
+        'User-Agent': 'omniloop'
       }
     });
 
@@ -73,10 +73,10 @@ export class GitHubFeatureSource implements FeatureSource {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'ai-harness',
+          'User-Agent': 'omniloop',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ body: 'Completed by AI Harness.' })
+        body: JSON.stringify({ body: 'Completed by AI OmniLoop.' })
       });
 
       await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
@@ -84,7 +84,7 @@ export class GitHubFeatureSource implements FeatureSource {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'ai-harness',
+          'User-Agent': 'omniloop',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ state: 'closed' })
