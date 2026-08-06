@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { Feature } from './BlueprintRepository';
-import { Vcs } from './Vcs';
+import { Vcs } from '../vcs/Vcs';
 
 export class ContextSynthesizer {
   private readonly MAX_CONTEXT_LENGTH = 40000;
