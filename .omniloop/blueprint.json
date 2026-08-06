@@ -1,9 +1,0 @@
-{
-  "features": [
-    {
-      "id": "1",
-      "description": "Create a simple `hello.txt` file with the content 'Hello, World!' in the root directory.",
-      "passes": false
-    }
-  ]
-}
