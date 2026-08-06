@@ -47,10 +47,27 @@ export class ContextSynthesizer {
           try {
             const files = fs.readdirSync(cPath, { recursive: true });
             let dirContext = '';
+            const MAX_FILE_SIZE = 512 * 1024; // 512 KB
             for (const file of files) {
               const fullPath = path.join(cPath, file.toString());
-              if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile() && (fullPath.endsWith('.md') || fullPath.endsWith('.txt'))) {
-                dirContext += `\n--- ${file.toString()} ---\n${fs.readFileSync(fullPath, 'utf-8')}\n`;
+              if (!fs.existsSync(fullPath)) continue;
+              if (fullPath.endsWith('.md') || fullPath.endsWith('.txt')) {
+                try {
+                  const fileStat = fs.statSync(fullPath);
+                  if (fileStat.isFile()) {
+                    if (fileStat.size > MAX_FILE_SIZE) {
+                      console.warn(`[!] Skipping ${fullPath} - Exceeds memory safety limit (${fileStat.size} bytes)`);
+                      continue;
+                    }
+                    dirContext += `\n--- ${file.toString()} ---\n${fs.readFileSync(fullPath, 'utf-8')}\n`;
+                    if (dirContext.length > this.MAX_CONTEXT_LENGTH) {
+                      console.warn(`[!] Directory context limit reached for ${cPath}`);
+                      break;
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`[!] Could not read file stat for ${fullPath}`, err);
+                }
               }
             }
             if (dirContext) {

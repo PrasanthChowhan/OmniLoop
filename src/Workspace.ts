@@ -46,7 +46,20 @@ export class Workspace {
   }
 
   public saveJson(filepath: string, data: any): void {
-    fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
+    const dir = path.dirname(filepath);
+    const base = path.basename(filepath);
+    const tmpPath = path.join(dir, `.${base}.tmp.${process.pid}.${Date.now()}`);
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.renameSync(tmpPath, filepath);
+    } catch (error) {
+      if (fs.existsSync(tmpPath)) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {}
+      }
+      throw error;
+    }
   }
 
   public recordMetric(key: string, increment: number = 1): void {

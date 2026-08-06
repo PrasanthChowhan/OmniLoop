@@ -11,6 +11,7 @@ export interface Vcs {
   getRecentCommitHistory(count: number): string;
   getDiffStatFromBase(): string;
   discardUncommittedChanges(): void;
+  ensureCleanWorkingTree(): void;
 }
 
 export class GitVcs implements Vcs {
@@ -41,6 +42,7 @@ export class GitVcs implements Vcs {
   }
 
   public checkoutFeatureBranch(featureId: string): void {
+    this.ensureCleanWorkingTree();
     const branchName = `feature_${featureId}`;
     const current = this.runGitCommand(['branch', '--show-current']);
     if (current === branchName) return;
@@ -79,6 +81,7 @@ export class GitVcs implements Vcs {
   }
 
   public checkoutCommit(commitHash: string): void {
+    this.ensureCleanWorkingTree();
     this.runGitCommand(['checkout', commitHash]);
   }
 
@@ -94,8 +97,16 @@ export class GitVcs implements Vcs {
     return this.runGitCommand(['diff', 'main', '--stat']);
   }
 
+  public ensureCleanWorkingTree(): void {
+    const status = this.runGitCommand(['status', '--porcelain']);
+    if (status) {
+      console.warn('[!] Dirty working tree detected. Stashing changes including untracked files to prevent data loss...');
+      this.runGitCommand(['stash', 'push', '--include-untracked', '-m', '"Omniloop auto-stash before sprint"']);
+      console.warn('[*] Your changes have been stashed. Retrieve them later using: git stash pop');
+    }
+  }
+
   public discardUncommittedChanges(): void {
     this.runGitCommand(['checkout', '--', '.']); // Revert tracked files
-    this.runGitCommand(['clean', '-fd']); // Remove untracked files
   }
 }

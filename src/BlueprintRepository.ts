@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 
 export interface Feature {
   id: string;
@@ -33,7 +34,20 @@ export class JsonBlueprintRepository implements BlueprintRepository {
   }
 
   private saveJson(data: any): void {
-    fs.writeFileSync(this.filepath, JSON.stringify(data, null, 2), 'utf-8');
+    const dir = path.dirname(this.filepath);
+    const base = path.basename(this.filepath);
+    const tmpPath = path.join(dir, `.${base}.tmp.${process.pid}.${Date.now()}`);
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.renameSync(tmpPath, this.filepath);
+    } catch (error) {
+      if (fs.existsSync(tmpPath)) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {}
+      }
+      throw error;
+    }
   }
 
   getFeatures(): Feature[] {

@@ -113,7 +113,36 @@ Examples:
       templateInjections += "\n<github-issues>\n!`gh issue list --state open --json number,title,body`\n</github-issues>\n";
     }
     if (tasksPath) {
-      templateInjections += `\n<task-files>\n!\`cat ${tasksPath}/*.md || cat ${tasksPath}/*.txt || echo "No text files found in ${tasksPath}"\`\n</task-files>\n`;
+      const resolvedTasksPath = path.resolve(process.cwd(), tasksPath);
+      // Guard against path traversal with boundary separation
+      const isInsideCwd = resolvedTasksPath === process.cwd() || 
+                          resolvedTasksPath.startsWith(process.cwd() + path.sep);
+
+      if (!isInsideCwd) {
+        console.error('[-] Path traversal detected in --tasks flag.');
+        process.exit(1);
+      }
+
+      let tasksContent = '';
+      try {
+        if (fs.existsSync(resolvedTasksPath)) {
+          const stat = fs.statSync(resolvedTasksPath);
+          if (stat.isDirectory()) {
+            const taskFiles = fs.readdirSync(resolvedTasksPath)
+              .filter(f => f.endsWith('.md') || f.endsWith('.txt'));
+            for (const f of taskFiles) {
+              tasksContent += `\n--- ${f} ---\n` + fs.readFileSync(path.join(resolvedTasksPath, f), 'utf-8') + '\n';
+            }
+          } else if (stat.isFile()) {
+            tasksContent = fs.readFileSync(resolvedTasksPath, 'utf-8') + '\n';
+          }
+        }
+      } catch (err: any) {
+        console.error(`[-] Failed to read tasks path: ${err.message}`);
+        process.exit(1);
+      }
+
+      templateInjections += `\n<task-files>\n${tasksContent || 'No text files found'}\n</task-files>\n`;
     }
 
     console.log('[*] Running Planner...');
@@ -218,5 +247,31 @@ Examples:
     process.exit(0);
   }
 }
+
+let isShuttingDown = false;
+function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n[!] Received ${signal}. Cleaning up state and exiting...`);
+
+  try {
+    const omniloopDir = path.join(process.cwd(), '.omniloop');
+    if (fs.existsSync(omniloopDir)) {
+      const files = fs.readdirSync(omniloopDir);
+      for (const f of files) {
+        if (f.startsWith('temp_') && f.endsWith('_prompt.txt')) {
+          try {
+            fs.unlinkSync(path.join(omniloopDir, f));
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  process.exit(130);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 main();
