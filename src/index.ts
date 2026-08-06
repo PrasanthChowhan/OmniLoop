@@ -3,192 +3,49 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
-import { JsonBlueprintRepository, Feature } from './BlueprintRepository';
-import { CliAgentRunner } from './AgentRunner';
-import { SprintOrchestrator, SprintDependencies } from './SprintOrchestrator';
-import { Workspace } from './Workspace';
-import { GitVcs } from './Vcs';
-import { ContextSynthesizer } from './ContextSynthesizer';
-import { extractXmlTag } from './StructuredOutput';
+import { JsonBlueprintRepository } from './state/BlueprintRepository';
+import { CliAgentRunner } from './core/AgentRunner';
+import { SprintOrchestrator, SprintDependencies } from './core/SprintOrchestrator';
+import { Workspace } from './state/Workspace';
+import { GitVcs } from './vcs/Vcs';
+import { ContextSynthesizer } from './state/ContextSynthesizer';
+import { parseArgs } from './cli/args';
+import { PlannerOrchestrator } from './core/PlannerOrchestrator';
+import { Logger } from './utils/logger';
 
 const SCRIPT_DIR = path.resolve(__dirname, '..');
 const PROMPTS_DIR = path.join(SCRIPT_DIR, '.omniloop');
 const MAX_CYCLES = 3;
 
 async function main() {
-  const args = process.argv.slice(2);
-  let goal = '';
-  let commitHash: string | null = null;
-  let retryFeatureId: string | null = null;
-  let useDocker = false;
-  let skipTest = false;
-  
-  let tasksPath: string | null = null;
-  let forceOverwrite = false;
-  let useGithub = false;
-  let globalCustomContextPath: string | null = null;
-  let mode = 'omniloop';
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--help' || args[i] === '-h') {
-      console.log(`
-OmniLoop - A prompt-driven, work-agnostic orchestrator
-
-Usage:
-  omniloop [goal] [options]
-
-Options:
-  --help, -h                Show this help message
-  --mode <mode>             Set the execution mode (e.g., 'ralph', 'omniloop')
-  --github                  Fetch open GitHub issues and plan them
-  --tasks <path>            Read task definitions from the specified folder/file
-  --context <path>          Provide a custom context file
-  --docker                  Run agents inside a Docker container
-  --force                   Overwrite existing blueprint.json if present
-  --no-test                 Skip the Evaluator verification phase
-  --resume-from-commit <id> Checkout a specific commit before running
-  --retry-feature <id>      Rollback and retry a specific feature ID
-
-Examples:
-  omniloop "Organize the codebase" --mode ralph
-  omniloop --github --mode ralph
-  omniloop --tasks ./backlog --mode ralph
-      `);
-      process.exit(0);
-    } else if (args[i] === '--resume-from-commit') {
-      commitHash = args[++i];
-    } else if (args[i] === '--retry-feature') {
-      retryFeatureId = args[++i];
-    } else if (args[i] === '--docker') {
-      useDocker = true;
-    } else if (args[i] === '--github') {
-      useGithub = true;
-    } else if (args[i] === '--tasks') {
-      tasksPath = args[++i];
-    } else if (args[i] === '--context') {
-      globalCustomContextPath = args[++i];
-    } else if (args[i] === '--force') {
-      forceOverwrite = true;
-    } else if (args[i] === '--no-test') {
-      skipTest = true;
-    } else if (args[i] === '--mode') {
-      mode = args[++i];
-    } else if (!args[i].startsWith('--')) {
-      goal = args[i];
-    }
-  }
+  const options = parseArgs(process.argv.slice(2));
 
   const workspace = new Workspace();
   const vcs = new GitVcs();
   const blueprint = new JsonBlueprintRepository(workspace.blueprintFile);
-  const contextSynthesizer = new ContextSynthesizer(vcs, workspace.humanAdviceFile, globalCustomContextPath);
+  const contextSynthesizer = new ContextSynthesizer(vcs, workspace.humanAdviceFile, options.globalCustomContextPath);
   
-  const actualPromptsDir = mode === 'ralph' ? path.join(PROMPTS_DIR, 'ralph') : PROMPTS_DIR;
+  const actualPromptsDir = options.mode === 'ralph' ? path.join(PROMPTS_DIR, 'ralph') : PROMPTS_DIR;
   const agentRunner = new CliAgentRunner(
     actualPromptsDir, 
-    useDocker, 
+    options.useDocker,
     workspace.recordMetric.bind(workspace), 
     workspace.logTrace.bind(workspace)
   );
 
-  if (commitHash) {
-    console.log(`[*] Checking out commit ${commitHash}...`);
-    vcs.checkoutCommit(commitHash);
+  if (options.commitHash) {
+    Logger.info(`Checking out commit ${options.commitHash}...`);
+    vcs.checkoutCommit(options.commitHash);
   }
 
-  if (retryFeatureId) {
-    blueprint.rollbackFeature(retryFeatureId);
-    vcs.commitDurableState(`Rollback to retry feature ${retryFeatureId}`, [workspace.blueprintFile]);
+  if (options.retryFeatureId) {
+    blueprint.rollbackFeature(options.retryFeatureId);
+    vcs.commitDurableState(`Rollback to retry feature ${options.retryFeatureId}`, [workspace.blueprintFile]);
   }
 
-  // Handle planner workflow
-  if (!fs.existsSync(workspace.blueprintFile)) {
-    if (!goal.trim() && !useGithub && !tasksPath) {
-      console.log('[-] No blueprint.json found. You must provide a goal, --github, or --tasks.');
-      process.exit(1);
-    }
-
-    let templateInjections = '';
-    if (useGithub) {
-      templateInjections += "\n<github-issues>\n!`gh issue list --state open --json number,title,body`\n</github-issues>\n";
-    }
-    if (tasksPath) {
-      const resolvedTasksPath = path.resolve(process.cwd(), tasksPath);
-      // Guard against path traversal with boundary separation
-      const isInsideCwd = resolvedTasksPath === process.cwd() || 
-                          resolvedTasksPath.startsWith(process.cwd() + path.sep);
-
-      if (!isInsideCwd) {
-        console.error('[-] Path traversal detected in --tasks flag.');
-        process.exit(1);
-      }
-
-      let tasksContent = '';
-      try {
-        if (fs.existsSync(resolvedTasksPath)) {
-          const stat = fs.statSync(resolvedTasksPath);
-          if (stat.isDirectory()) {
-            const taskFiles = fs.readdirSync(resolvedTasksPath)
-              .filter(f => f.endsWith('.md') || f.endsWith('.txt'));
-            for (const f of taskFiles) {
-              tasksContent += `\n--- ${f} ---\n` + fs.readFileSync(path.join(resolvedTasksPath, f), 'utf-8') + '\n';
-            }
-          } else if (stat.isFile()) {
-            tasksContent = fs.readFileSync(resolvedTasksPath, 'utf-8') + '\n';
-          }
-        }
-      } catch (err: any) {
-        console.error(`[-] Failed to read tasks path: ${err.message}`);
-        process.exit(1);
-      }
-
-      templateInjections += `\n<task-files>\n${tasksContent || 'No text files found'}\n</task-files>\n`;
-    }
-
-    console.log('[*] Running Planner...');
-    const result = agentRunner.runAgent('planner', { contextStr: '' }, { 
-      goal, 
-      featureId: 'init', 
-      cycle: 0, 
-      promptArgs: { TASK_DESCRIPTION: goal },
-      templateInjections
-    });
-
-    if (!result.success) {
-      console.log('[-] Planner failed to execute. Exiting.');
-      process.exit(1);
-    }
-
-    const planJsonStr = extractXmlTag(result.output, 'plan');
-    if (!planJsonStr) {
-      console.log('[-] Planner did not output a valid <plan> tag. Exiting.');
-      console.log(`Raw output: ${result.output}`);
-      process.exit(1);
-    }
-    
-    try {
-      const plan = JSON.parse(planJsonStr);
-      if (plan.features && Array.isArray(plan.features)) {
-        blueprint.saveFeatures(plan.features);
-      } else {
-        throw new Error('Invalid plan format: missing features array');
-      }
-    } catch (e: any) {
-      console.log(`[-] Failed to parse planner output: ${e.message}`);
-      process.exit(1);
-    }
-
-    workspace.recordMetric('planner_successes');
-    vcs.commitDurableState('Initial feature spec generated', [workspace.blueprintFile]);
-
-    if (fs.existsSync(workspace.sprintInitFile)) {
-      console.log('\n[!] SECURITY WARNING: The Planner generated an `init.sh` script to scaffold the project.');
-      console.log(`[!] To prevent arbitrary code execution, OmniLoop will NOT execute this automatically.`);
-      console.log(`[!] Please review the script at ${workspace.sprintInitFile} and run it manually if trusted.`);
-    }
-    
-    console.log('\n[!] blueprint.json generated. The process will continue automatically in 5 seconds (or press Ctrl+C to abort and review).');
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+  if (!workspace.hasBlueprintFile()) {
+    const planner = new PlannerOrchestrator(agentRunner, blueprint, workspace, vcs);
+    await planner.runPlanner(options.goal, options.useGithub, options.tasksPath);
   }
 
   function injectBug(): string | null {
@@ -218,10 +75,10 @@ Examples:
     vcs,
     contextSynthesizer,
     maxCycles: MAX_CYCLES,
-    skipTest,
+    skipTest: options.skipTest,
     injectBug,
     revertBug,
-    mode
+    mode: options.mode
   };
 
   const orchestrator = new SprintOrchestrator(sprintDeps);
@@ -231,19 +88,19 @@ Examples:
       const currentFeature = blueprint.getNextIncompleteFeature();
 
       if (!currentFeature) {
-        console.log('\n[+] All features passing! Project complete.');
+        Logger.success('All features passing! Project complete.');
         break;
       }
 
       const success = await orchestrator.runSprint(currentFeature);
 
       if (!success) {
-        console.log(`\n[-] Sprint failed for feature ${currentFeature.id}. Exiting loop to prevent infinite retry exhaustion.`);
+        Logger.error(`Sprint failed for feature ${currentFeature.id}. Exiting loop to prevent infinite retry exhaustion.`);
         break;
       }
     }
   } catch (err: any) {
-    console.log("\n\n[!] OmniLoop paused by user. Use .omniloop/human_advice.md to steer the agent on resume.");
+    Logger.warn("OmniLoop paused by user. Use .omniloop/human_advice.md to steer the agent on resume.");
     process.exit(0);
   }
 }

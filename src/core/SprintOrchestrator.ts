@@ -1,9 +1,9 @@
-import * as fs from 'fs';
-import { Feature, BlueprintRepository } from './BlueprintRepository';
+import { Feature, BlueprintRepository } from '../state/BlueprintRepository';
 import { AgentRunner } from './AgentRunner';
-import { Workspace } from './Workspace';
-import { Vcs } from './Vcs';
-import { ContextSynthesizer } from './ContextSynthesizer';
+import { Workspace } from '../state/Workspace';
+import { Vcs } from '../vcs/Vcs';
+import { ContextSynthesizer } from '../state/ContextSynthesizer';
+import { Logger } from '../utils/logger';
 
 export interface SprintDependencies {
   blueprint: BlueprintRepository;
@@ -28,14 +28,14 @@ export class SprintOrchestrator {
     } = this.deps;
 
     const featureId = feature.id || 'unknown';
-    console.log(`\n[*] ----------------------------------------------------`);
-    console.log(`[*] Sprint: [${featureId}] ${feature.description}`);
-    console.log(`[*] ----------------------------------------------------`);
+    Logger.info(`----------------------------------------------------`);
+    Logger.info(`Sprint: [${featureId}] ${feature.description}`);
+    Logger.info(`----------------------------------------------------`);
 
     if (this.deps.mode !== 'ralph') {
       vcs.checkoutFeatureBranch(featureId);
     } else {
-      console.log(`[*] Ralph Mode: Operating on current branch (Work Agnostic).`);
+      Logger.info(`Ralph Mode: Operating on current branch (Work Agnostic).`);
     }
 
     // --- Phase 1: Contract Negotiation ---
@@ -43,66 +43,67 @@ export class SprintOrchestrator {
     let contractCycle = 0;
     
     if (this.deps.mode === 'ralph') {
-      console.log('\n[*] Ralph Mode selected. Skipping Contract Negotiation (Phase 1).');
+      Logger.info('Ralph Mode selected. Skipping Contract Negotiation (Phase 1).');
       contractApproved = true;
     } else {
       while (contractCycle < maxCycles && !contractApproved) {
         contractCycle++;
-      console.log(`\n[*] --- Contract Cycle ${contractCycle}/${maxCycles} ---`);
-      let contractContext = contextSynthesizer.getSurgicalContext(feature);
-      if (fs.existsSync(workspace.feedbackFile)) {
-        const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
-        const truncatedFeedback = feedback.length > 5000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + feedback.substring(feedback.length - 5000) : feedback;
-        contractContext += `\nContract Feedback:\n${truncatedFeedback}\n`;
+        Logger.info(`--- Contract Cycle ${contractCycle}/${maxCycles} ---`);
+        let contractContext = contextSynthesizer.getSurgicalContext(feature);
+        if (workspace.hasFeedbackFile()) {
+          const feedback = workspace.readFeedbackFile();
+          const truncatedFeedback = feedback.length > 5000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + feedback.substring(feedback.length - 5000) : feedback;
+          contractContext += `\nContract Feedback:\n${truncatedFeedback}\n`;
+        }
+
+        Logger.info('Running Contractor...');
+        agentRunner.runAgent(
+          'contractor',
+          { contextStr: contractContext },
+          { goal: `Create a contract for: ${feature.description}`, featureId, cycle: contractCycle }
+        );
+
+        Logger.info('Running Reviewer...');
+        agentRunner.runAgent(
+          'reviewer',
+          { contextStr: contractContext },
+          { goal: `Review the contract for: ${feature.description}`, featureId, cycle: contractCycle }
+        );
+
+        if (workspace.hasContractApprovedFile()) {
+          Logger.success('Contract approved!');
+          contractApproved = true;
+          workspace.deleteContractApprovedFile();
+          workspace.deleteFeedbackFile();
+        } else {
+          Logger.error(`Contract rejected or missing approval. Retrying...`);
+        }
       }
 
-      console.log('[*] Running Contractor...');
-      agentRunner.runAgent(
-        'contractor',
-        { contextStr: contractContext },
-        { goal: `Create a contract for: ${feature.description}`, featureId, cycle: contractCycle }
-      );
-
-      console.log('[*] Running Reviewer...');
-      agentRunner.runAgent(
-        'reviewer',
-        { contextStr: contractContext },
-        { goal: `Review the contract for: ${feature.description}`, featureId, cycle: contractCycle }
-      );
-
-      if (fs.existsSync(workspace.contractApprovedFile)) {
-        console.log('[+] Contract approved!');
-        contractApproved = true;
-        fs.unlinkSync(workspace.contractApprovedFile);
-        if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
-      } else {
-        console.log(`[-] Contract rejected or missing approval. Retrying...`);
+      if (!contractApproved) {
+        Logger.warn(`Feature [${featureId}] failed to negotiate a contract after ${maxCycles} cycles.`);
+        Logger.warn(`Check \`human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+        return false;
       }
     }
 
-    if (!contractApproved) {
-      console.log(`\n[!] WARNING: Feature [${featureId}] failed to negotiate a contract after ${maxCycles} cycles.`);
-      console.log(`[!] Check \`.omniloop/human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
-      return false;
-    }
-    }
 
     // --- Phase 2: Implementation ---
     let cycle = 0;
     let featurePassed = false;
     while (cycle < maxCycles) {
       cycle++;
-      console.log(`\n[*] --- Implementation Cycle ${cycle}/${maxCycles} ---`);
+      Logger.info(`--- Implementation Cycle ${cycle}/${maxCycles} ---`);
 
       let generatorContext = contextSynthesizer.getSurgicalContext(feature);
-      if (fs.existsSync(workspace.sprintContractFile)) {
-        const contract = fs.readFileSync(workspace.sprintContractFile, 'utf-8');
+      if (workspace.hasSprintContractFile()) {
+        const contract = workspace.readSprintContractFile();
         const truncatedContract = contract.length > 8000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + contract.substring(contract.length - 8000) : contract;
         generatorContext += `\nApproved Sprint Contract:\n${truncatedContract}\n`;
       }
-      if (fs.existsSync(workspace.feedbackFile)) {
-        const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
+      if (workspace.hasFeedbackFile()) {
+        const feedback = workspace.readFeedbackFile();
         const truncatedFeedback = feedback.length > 5000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + feedback.substring(feedback.length - 5000) : feedback;
         generatorContext += `\nEvaluator Feedback:\n${truncatedFeedback}\n`;
       }
@@ -111,10 +112,10 @@ export class SprintOrchestrator {
         TASK_DESCRIPTION: feature.description,
         CUSTOM_SYSTEM_PROMPT: feature.customSystemPrompt || '',
         CONTEXT: generatorContext,
-        FEEDBACK: fs.existsSync(workspace.feedbackFile) ? fs.readFileSync(workspace.feedbackFile, 'utf-8') : 'No previous feedback.'
+        FEEDBACK: workspace.hasFeedbackFile() ? workspace.readFeedbackFile() : 'No previous feedback.'
       };
 
-      console.log('[*] Running Generator...');
+      Logger.info('Running Generator...');
       const success = agentRunner.runAgent(
         'generator',
         { contextStr: generatorContext },
@@ -123,9 +124,9 @@ export class SprintOrchestrator {
       if (success) workspace.recordMetric('generator_successes');
 
       if (skipTest) {
-        console.log(`[+] Skipping evaluation phase for Feature [${featureId}] due to --no-test flag.`);
+        Logger.success(`Skipping evaluation phase for Feature [${featureId}] due to --no-test flag.`);
         blueprint.markFeaturePassed(featureId);
-        if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
+        workspace.deleteFeedbackFile();
 
         if (this.deps.mode !== 'ralph') {
           vcs.mergeFeatureBranch(featureId, feature.description);
@@ -133,7 +134,7 @@ export class SprintOrchestrator {
         const desc = feature.description ? `: ${feature.description.replace(/"/g, '\\"')}` : '';
         vcs.commitDurableState(`Feature ${featureId} completed${this.deps.mode !== 'ralph' ? ' and merged' : ''} (no-test mode)${desc}`, [workspace.blueprintFile]);
         
-        const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
+        const updatedFeature = blueprint.getFeatures().find((f: any) => String(f.id) === String(featureId));
         featurePassed = true;
         break;
       }
@@ -147,7 +148,7 @@ export class SprintOrchestrator {
       };
 
       if (cycle === 1 && this.deps.mode !== 'ralph') {
-        console.log('[*] Performing Meta-Evaluation Chaos Test...');
+        Logger.info('Performing Meta-Evaluation Chaos Test...');
         const bugFile = injectBug();
         if (bugFile) {
           agentRunner.runAgent(
@@ -156,42 +157,42 @@ export class SprintOrchestrator {
             { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
           );
           
-          const postChaosFeat = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
+          const postChaosFeat = blueprint.getFeatures().find((f: any) => String(f.id) === String(featureId));
 
           if (postChaosFeat && postChaosFeat.passes) {
-            console.log("[-] Evaluator FAILED Meta-Evaluation! It passed a broken build.");
+            Logger.error("Evaluator FAILED Meta-Evaluation! It passed a broken build.");
             workspace.recordMetric("evaluator_chaos_fails");
-            fs.writeFileSync(workspace.feedbackFile, "META-EVALUATION FAILED: You marked a build as 'passes: true' even though it contained a blatant syntax error. Your tests are fake or broken. Fix your testing strategy.", 'utf-8');
+            workspace.writeFeedbackFile("META-EVALUATION FAILED: You marked a build as 'passes: true' even though it contained a blatant syntax error. Your tests are fake or broken. Fix your testing strategy.");
             
             blueprint.markFeatureFailed(featureId);
           } else {
-            console.log("[+] Evaluator caught the chaos bug successfully.");
+            Logger.success("Evaluator caught the chaos bug successfully.");
             workspace.recordMetric("evaluator_chaos_successes");
-            if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
+            workspace.deleteFeedbackFile();
           }
 
           revertBug(bugFile);
 
-          const postRevertFeat = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
+          const postRevertFeat = blueprint.getFeatures().find((f: any) => String(f.id) === String(featureId));
           if (postRevertFeat && postRevertFeat.passes) {
             continue; // Restart cycle
           }
         }
       }
 
-      console.log('[*] Running Evaluator (Real)...');
+      Logger.info('Running Evaluator (Real)...');
       agentRunner.runAgent(
         'evaluator',
         { contextStr: evaluatorContext },
         { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
       );
 
-      const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
+      const updatedFeature = blueprint.getFeatures().find((f: any) => String(f.id) === String(featureId));
 
       if (updatedFeature && updatedFeature.passes) {
-        console.log(`[+] Feature [${featureId}] passed evaluation!`);
+        Logger.success(`Feature [${featureId}] passed evaluation!`);
         workspace.recordMetric('evaluator_successes');
-        if (fs.existsSync(workspace.feedbackFile)) fs.unlinkSync(workspace.feedbackFile);
+        workspace.deleteFeedbackFile();
 
         if (this.deps.mode !== 'ralph') {
           vcs.mergeFeatureBranch(featureId, feature.description);
@@ -201,13 +202,13 @@ export class SprintOrchestrator {
         featurePassed = true;
         break;
       } else {
-        console.log(`[-] Feature [${featureId}] failed evaluation. Retrying...`);
+        Logger.error(`Feature [${featureId}] failed evaluation. Retrying...`);
       }
     }
 
     if (!featurePassed && cycle >= maxCycles) {
-      console.log(`\n[!] WARNING: Feature [${featureId}] failed to pass after ${maxCycles} cycles.`);
-      console.log(`[!] Check \`.omniloop/human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
+      Logger.warn(`Feature [${featureId}] failed to pass after ${maxCycles} cycles.`);
+      Logger.warn(`Check \`.omniloop/human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
       return false;
     }

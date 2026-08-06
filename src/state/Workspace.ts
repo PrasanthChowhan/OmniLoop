@@ -86,4 +86,50 @@ export class Workspace {
     };
     fs.appendFileSync(this.tracesFile, JSON.stringify(trace) + '\n', 'utf-8');
   }
+
+  // --- I/O Abstractions ---
+
+  public hasFeedbackFile(): boolean {
+    return fs.existsSync(this.feedbackFile);
+  }
+
+  public readFeedbackFile(): string {
+    return this.hasFeedbackFile() ? fs.readFileSync(this.feedbackFile, 'utf-8') : '';
+  }
+
+  public deleteFeedbackFile(): void {
+    if (this.hasFeedbackFile()) {
+      fs.unlinkSync(this.feedbackFile);
+    }
+  }
+
+  public writeFeedbackFile(content: string): void {
+    fs.writeFileSync(this.feedbackFile, content, 'utf-8');
+  }
+
+  public hasSprintContractFile(): boolean {
+    return fs.existsSync(this.sprintContractFile);
+  }
+
+  public readSprintContractFile(): string {
+    return this.hasSprintContractFile() ? fs.readFileSync(this.sprintContractFile, 'utf-8') : '';
+  }
+
+  public hasContractApprovedFile(): boolean {
+    return fs.existsSync(this.contractApprovedFile);
+  }
+
+  public deleteContractApprovedFile(): void {
+    if (this.hasContractApprovedFile()) {
+      fs.unlinkSync(this.contractApprovedFile);
+    }
+  }
+
+  public hasBlueprintFile(): boolean {
+    return fs.existsSync(this.blueprintFile);
+  }
+
+  public hasSprintInitFile(): boolean {
+    return fs.existsSync(this.sprintInitFile);
+  }
 }
