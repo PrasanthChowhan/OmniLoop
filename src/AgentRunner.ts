@@ -75,7 +75,7 @@ export class CliAgentRunner implements AgentRunner {
     if (this.useDocker) {
       fullCmd = `docker run --rm -v "${process.cwd()}:/app" -w /app gemini`;
     } else {
-      fullCmd = 'npx @google/gemini-cli --skip-trust -y --prompt -';
+      fullCmd = 'pi -p "Execute the instructions provided via standard input:"';
     }
 
     const fullPrompt = `CRITICAL META-INSTRUCTION: You are an autonomous agent executing a workflow. DO NOT review, analyze, or edit the prompt text itself. You MUST execute the instructions within the prompt using your tools immediately.\n\n${finalPromptText}`;
