@@ -153,19 +153,9 @@ Examples:
     vcs.commitDurableState('Initial feature spec generated', [workspace.blueprintFile]);
 
     if (fs.existsSync(workspace.sprintInitFile)) {
-      console.log('[*] Executing init.sh to scaffold project...');
-      try {
-        const { spawnSync } = require('child_process');
-        const initResult = spawnSync('bash', [workspace.sprintInitFile], { stdio: 'inherit', shell: true });
-        if (initResult.status !== 0) {
-          console.warn(`[!] Warning: init.sh exited with code ${initResult.status}`);
-        } else {
-          console.log('[+] Project scaffolded successfully.');
-          vcs.commitDurableState('Project scaffolded via init.sh', []);
-        }
-      } catch (e: any) {
-        console.error(`[-] Failed to execute init.sh: ${e.message}`);
-      }
+      console.log('\n[!] SECURITY WARNING: The Planner generated an `init.sh` script to scaffold the project.');
+      console.log(`[!] To prevent arbitrary code execution, OmniLoop will NOT execute this automatically.`);
+      console.log(`[!] Please review the script at ${workspace.sprintInitFile} and run it manually if trusted.`);
     }
     
     console.log('\n[!] blueprint.json generated. The process will continue automatically in 5 seconds (or press Ctrl+C to abort and review).');
@@ -217,6 +207,11 @@ Examples:
       }
 
       const success = await orchestrator.runSprint(currentFeature);
+
+      if (!success) {
+        console.log(`\n[-] Sprint failed for feature ${currentFeature.id}. Exiting loop to prevent infinite retry exhaustion.`);
+        break;
+      }
     }
   } catch (err: any) {
     console.log("\n\n[!] OmniLoop paused by user. Use human_advice.md to steer the agent on resume.");

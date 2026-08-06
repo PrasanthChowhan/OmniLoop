@@ -11,6 +11,7 @@ export class Workspace {
   public readonly feedbackFile: string;
   public readonly humanAdviceFile: string;
   public readonly contractApprovedFile: string;
+  public readonly progressFile: string;
 
   constructor(private rootDir: string = process.cwd()) {
     this.tracesFile = path.join(this.omniloopDir, 'omniloop_traces.jsonl');
@@ -21,6 +22,7 @@ export class Workspace {
     this.feedbackFile = path.join(this.omniloopDir, 'sprint_feedback.md');
     this.humanAdviceFile = path.join(this.omniloopDir, 'human_advice.md');
     this.contractApprovedFile = path.join(this.omniloopDir, 'contract_approved.txt');
+    this.progressFile = path.join(this.omniloopDir, 'omniloop-progress.txt');
 
     this.ensureOmniLoopDir();
   }

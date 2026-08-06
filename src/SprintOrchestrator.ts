@@ -52,7 +52,7 @@ export class SprintOrchestrator {
       let contractContext = contextSynthesizer.getSurgicalContext(feature);
       if (fs.existsSync(workspace.feedbackFile)) {
         const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
-        const truncatedFeedback = feedback.length > 5000 ? feedback.substring(0, 5000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : feedback;
+        const truncatedFeedback = feedback.length > 5000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + feedback.substring(feedback.length - 5000) : feedback;
         contractContext += `\nContract Feedback:\n${truncatedFeedback}\n`;
       }
 
@@ -95,29 +95,29 @@ export class SprintOrchestrator {
       cycle++;
       console.log(`\n[*] --- Implementation Cycle ${cycle}/${maxCycles} ---`);
 
-      let context = contextSynthesizer.getSurgicalContext(feature);
+      let generatorContext = contextSynthesizer.getSurgicalContext(feature);
       if (fs.existsSync(workspace.sprintContractFile)) {
         const contract = fs.readFileSync(workspace.sprintContractFile, 'utf-8');
-        const truncatedContract = contract.length > 8000 ? contract.substring(0, 8000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : contract;
-        context += `\nApproved Sprint Contract:\n${truncatedContract}\n`;
+        const truncatedContract = contract.length > 8000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + contract.substring(contract.length - 8000) : contract;
+        generatorContext += `\nApproved Sprint Contract:\n${truncatedContract}\n`;
       }
       if (fs.existsSync(workspace.feedbackFile)) {
         const feedback = fs.readFileSync(workspace.feedbackFile, 'utf-8');
-        const truncatedFeedback = feedback.length > 5000 ? feedback.substring(0, 5000) + '\n...[TRUNCATED TO PREVENT EXHAUSTION]...' : feedback;
-        context += `\nEvaluator Feedback:\n${truncatedFeedback}\n`;
+        const truncatedFeedback = feedback.length > 5000 ? '...[TRUNCATED TO PREVENT EXHAUSTION]...\n' + feedback.substring(feedback.length - 5000) : feedback;
+        generatorContext += `\nEvaluator Feedback:\n${truncatedFeedback}\n`;
       }
 
       const promptArgs = {
         TASK_DESCRIPTION: feature.description,
         CUSTOM_SYSTEM_PROMPT: feature.customSystemPrompt || '',
-        CONTEXT: context,
+        CONTEXT: generatorContext,
         FEEDBACK: fs.existsSync(workspace.feedbackFile) ? fs.readFileSync(workspace.feedbackFile, 'utf-8') : 'No previous feedback.'
       };
 
       console.log('[*] Running Generator...');
       const success = agentRunner.runAgent(
         'generator',
-        { contextStr: context },
+        { contextStr: generatorContext },
         { goal: `Focus on this feature: ${feature.description}`, featureId, cycle, promptArgs }
       );
       if (success) workspace.recordMetric('generator_successes');
@@ -138,14 +138,22 @@ export class SprintOrchestrator {
         break;
       }
 
+      // The Evaluator should always operate in a clean context without the Generator's feedback baggage
+      const evaluatorContext = contextSynthesizer.getSurgicalContext(feature);
+      const evaluatorPromptArgs = {
+        ...promptArgs,
+        CONTEXT: evaluatorContext,
+        FEEDBACK: 'No previous feedback.'
+      };
+
       if (cycle === 1 && this.deps.mode !== 'ralph') {
         console.log('[*] Performing Meta-Evaluation Chaos Test...');
         const bugFile = injectBug();
         if (bugFile) {
           agentRunner.runAgent(
             'evaluator',
-            { contextStr: context },
-            { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs }
+            { contextStr: evaluatorContext },
+            { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
           );
           
           const postChaosFeat = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
@@ -174,8 +182,8 @@ export class SprintOrchestrator {
       console.log('[*] Running Evaluator (Real)...');
       agentRunner.runAgent(
         'evaluator',
-        { contextStr: context },
-        { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs }
+        { contextStr: evaluatorContext },
+        { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
       );
 
       const updatedFeature = blueprint.getFeatures().find((f) => String(f.id) === String(featureId));
