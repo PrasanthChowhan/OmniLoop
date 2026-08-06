@@ -82,7 +82,7 @@ export class SprintOrchestrator {
 
     if (!contractApproved) {
       console.log(`\n[!] WARNING: Feature [${featureId}] failed to negotiate a contract after ${maxCycles} cycles.`);
-      console.log(`[!] Check \`human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
+      console.log(`[!] Check \`.omniloop/human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
       return false;
     }
@@ -207,7 +207,7 @@ export class SprintOrchestrator {
 
     if (!featurePassed && cycle >= maxCycles) {
       console.log(`\n[!] WARNING: Feature [${featureId}] failed to pass after ${maxCycles} cycles.`);
-      console.log(`[!] Check \`human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
+      console.log(`[!] Check \`.omniloop/human_advice.md\`. Resuming automatically in 5 seconds (Ctrl+C to abort) ...`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
       return false;
     }

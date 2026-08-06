@@ -31,6 +31,9 @@ export class Workspace {
     if (!fs.existsSync(this.omniloopDir)) {
       fs.mkdirSync(this.omniloopDir, { recursive: true });
     }
+    if (!fs.existsSync(this.humanAdviceFile)) {
+      fs.writeFileSync(this.humanAdviceFile, '# Human Advice\n\nWrite your feedback/instructions here to steer the agent.\n', 'utf-8');
+    }
   }
 
   public loadJson(filepath: string, defaultVal: any = null): any {

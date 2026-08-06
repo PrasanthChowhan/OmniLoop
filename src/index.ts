@@ -243,7 +243,7 @@ Examples:
       }
     }
   } catch (err: any) {
-    console.log("\n\n[!] OmniLoop paused by user. Use human_advice.md to steer the agent on resume.");
+    console.log("\n\n[!] OmniLoop paused by user. Use .omniloop/human_advice.md to steer the agent on resume.");
     process.exit(0);
   }
 }
