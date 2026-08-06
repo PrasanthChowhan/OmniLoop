@@ -1,15 +1,18 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const SHELL_BLOCK_MARKER = '\x01';
 const SHELL_BLOCK_PATTERN = /!`([^`]+)`/g;
 const MARKED_SHELL_BLOCK_PATTERN = new RegExp(`!${SHELL_BLOCK_MARKER}\`([^\`]+)\``, 'g');
 const PLACEHOLDER_PATTERN = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
 
-export function resolvePrompt(
+export async function resolvePrompt(
   promptTemplate: string,
   args: Record<string, string>,
   cwd: string
-): string {
+): Promise<string> {
   // 1. Mark legitimate shell blocks in the raw template
   let markedPrompt = promptTemplate
     .replaceAll(SHELL_BLOCK_MARKER, '')
@@ -21,10 +24,24 @@ export function resolvePrompt(
     sanitizedArgs[key] = (value || '').toString().replaceAll(SHELL_BLOCK_MARKER, '');
   }
 
+  // Track used arguments to warn about unused ones
+  const usedArgs = new Set<string>();
+
   // 3. Substitute {{KEY}} placeholders safely
   markedPrompt = markedPrompt.replace(PLACEHOLDER_PATTERN, (match, key) => {
-    return sanitizedArgs[key] !== undefined ? sanitizedArgs[key] : match;
+    if (sanitizedArgs[key] === undefined) {
+      throw new Error(`Prompt placeholder {{${key}}} has no matching argument.`);
+    }
+    usedArgs.add(key);
+    return sanitizedArgs[key];
   });
+
+  // Warn about unused arguments
+  for (const key of Object.keys(sanitizedArgs)) {
+    if (!usedArgs.has(key)) {
+      console.warn(`[Warning] Unused prompt argument: ${key}`);
+    }
+  }
 
   // 4. Find and execute ONLY the securely marked shell blocks
   const matches = [...markedPrompt.matchAll(MARKED_SHELL_BLOCK_PATTERN)];
@@ -32,17 +49,23 @@ export function resolvePrompt(
     return markedPrompt.replaceAll(SHELL_BLOCK_MARKER, '');
   }
 
-  let finalPrompt = markedPrompt;
-  for (const match of matches) {
+  // Execute commands in parallel
+  const executions = matches.map(async (match) => {
     const command = match[1];
     try {
       console.log(`[*] Expanding secure shell block: \`${command}\``);
-      const output = execSync(command, { cwd, encoding: 'utf-8', stdio: 'pipe' });
-      finalPrompt = finalPrompt.replace(match[0], output.trimEnd());
+      const { stdout } = await execAsync(command, { cwd });
+      return { match: match[0], output: stdout.trimEnd() };
     } catch (error: any) {
-      console.error(`[!] Shell expansion failed for \`${command}\`: ${error.message}`);
-      finalPrompt = finalPrompt.replace(match[0], `[Error executing ${command}: ${error.stderr?.trim() || error.message}]`);
+      throw new Error(`Command failed: ${command}\n${error.message}`);
     }
+  });
+
+  const results = await Promise.all(executions);
+
+  let finalPrompt = markedPrompt;
+  for (const { match, output } of results) {
+    finalPrompt = finalPrompt.replace(match, output);
   }
 
   // 5. Strip any remaining markers before returning

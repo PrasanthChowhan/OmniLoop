@@ -29,7 +29,7 @@ export class PlannerOrchestrator {
     }
 
     Logger.info('Running Planner...');
-    const result = this.agentRunner.runAgent('planner', { contextStr: '' }, {
+    const result = await this.agentRunner.runAgent('planner', { contextStr: '' }, {
       goal,
       featureId: 'init',
       cycle: 0,

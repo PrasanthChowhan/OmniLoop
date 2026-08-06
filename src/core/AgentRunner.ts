@@ -26,7 +26,7 @@ export interface AgentRunner {
     role: AgentRole,
     context: AgentContext,
     task: AgentTask
-  ): AgentResult;
+  ): Promise<AgentResult>;
 }
 
 export class CliAgentRunner implements AgentRunner {
@@ -37,11 +37,11 @@ export class CliAgentRunner implements AgentRunner {
     private logTraceFn: (featureId: string, agentName: string, cycle: number, stdout: string, stderr: string) => void
   ) {}
 
-  runAgent(
+  async runAgent(
     role: AgentRole,
     context: AgentContext,
     task: AgentTask
-  ): AgentResult {
+  ): Promise<AgentResult> {
     const promptFile = `${role}_prompt.md`;
     const promptPath = path.join(this.promptsDir, promptFile);
     if (!fs.existsSync(promptPath)) {
@@ -65,7 +65,7 @@ export class CliAgentRunner implements AgentRunner {
     }
 
     const { resolvePrompt } = require('../utils/PromptResolver');
-    const finalPromptText = resolvePrompt(systemPrompt, task.promptArgs || {}, process.cwd());
+    const finalPromptText = await resolvePrompt(systemPrompt, task.promptArgs || {}, process.cwd());
 
     const agentName = role;
 
@@ -123,11 +123,11 @@ export class CliAgentRunner implements AgentRunner {
 export class MockAgentRunner implements AgentRunner {
   constructor(private defaultResult: boolean = true) {}
   
-  runAgent(
+  async runAgent(
     role: AgentRole,
     context: AgentContext,
     task: AgentTask
-  ): AgentResult {
+  ): Promise<AgentResult> {
     console.log(`[Mock] Running agent with role ${role} for feature ${task.featureId}, cycle ${task.cycle}`);
     return { success: this.defaultResult, output: 'Mock Output' };
   }
