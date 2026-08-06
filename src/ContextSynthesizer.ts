@@ -109,7 +109,17 @@ export class ContextSynthesizer {
       }
     }
 
-    // 6. Hard limit to avoid Context Urgency
+    // 6. Shift Worker State Persistence (Progress Journal)
+    const progressFilePath = path.join('.omniloop', 'omniloop-progress.txt');
+    if (fs.existsSync(progressFilePath)) {
+      const progress = fs.readFileSync(progressFilePath, 'utf-8').trim();
+      if (progress) {
+        context += `\n### OMNILOOP PROGRESS LOG ###\nThe living log of what has been done previously:\n${progress}\n\n`;
+        console.log('[+] Injected Progress Journal.');
+      }
+    }
+
+    // 7. Hard limit to avoid Context Urgency
     if (context.length > this.MAX_CONTEXT_LENGTH) {
       console.warn(`[!] Context string exceeded ${this.MAX_CONTEXT_LENGTH} characters. Truncating to prevent Context Urgency.`);
       context = context.substring(0, this.MAX_CONTEXT_LENGTH) + '\n...[GLOBAL CONTEXT TRUNCATED DUE TO SIZE LIMITS]...';
