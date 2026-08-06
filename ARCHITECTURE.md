@@ -36,6 +36,18 @@ To achieve this, the omniloop separates concerns across a GAN-inspired (Generati
 - `.omniloop/omniloop-progress.txt`: A living log of what has been done.
 - **VCS Commit History:** Provides exact code diffs and rollback capabilities if an agent goes off the rails.
 
+## Directory Map & Decision Table
+
+The codebase has been refactored to eliminate "God Modules" and enforce a single-responsibility architecture. All new files must be placed according to the following decision table:
+
+| Directory | Purpose / Allowed Files | Examples |
+|-----------|-------------------------|----------|
+| `src/cli/` | CLI parsing, argument handling, terminal UI | `args.ts`, `index.ts` (entrypoint) |
+| `src/core/` | High-level business logic, orchestrators, workflows | `SprintOrchestrator.ts`, `PlannerOrchestrator.ts`, `AgentRunner.ts` |
+| `src/state/` | File system I/O wrappers, durable state persistence | `Workspace.ts`, `BlueprintRepository.ts`, `ContextSynthesizer.ts` |
+| `src/vcs/` | Git and version control abstractions | `Vcs.ts` |
+| `src/utils/` | Centralized helpers, common parsers, logging | `logger.ts`, `PromptResolver.ts`, `StructuredOutput.ts` |
+
 ## Architecture & Agent Personas
 
 ### 1. Planner Agent (`.omniloop/planner_prompt.md`)
@@ -63,14 +75,14 @@ To achieve this, the omniloop separates concerns across a GAN-inspired (Generati
 - **Task:** Tests the **Generator's** work empirically against functionality, aesthetics, and robustness. Fails the build if it doesn't meet the high bar.
 - **Output:** Updates the **Blueprint** to passing upon success, or writes gritty critique back into `sprint_feedback.md` upon failure.
 
-## Workflow Lifecycle (`src/index.ts`)
+## Workflow Lifecycle
 
-The omniloop is modularized into several key components:
+The omniloop is modularized into several key directories:
 
-1. **`Workspace`**: Owns the knowledge of the omniloop directory structure (`.omniloop`) and provides a deep interface for state persistence (metrics, traces, features).
-2. **`Vcs` (GitVcs)**: Abstracts source control operations, providing a clean interface for branch management and state checkpoints.
-3. **`ContextSynthesizer`**: Decouples the complex logic of gathering surgical context (VCS diffs, Ctags, project files) from the orchestration logic.
-4. **`FeatureSource`**: Provides an abstraction for fetching work from different sources, such as GitHub issues or local task files.
+1. **`src/state/Workspace`**: Owns the knowledge of the omniloop directory structure (`.omniloop`) and provides a deep interface for state persistence (metrics, traces, features). All explicit `fs` interactions regarding state belong here.
+2. **`src/vcs/Vcs` (GitVcs)**: Abstracts source control operations, providing a clean interface for branch management and state checkpoints.
+3. **`src/state/ContextSynthesizer`**: Decouples the complex logic of gathering surgical context (VCS diffs, Ctags, project files) from the orchestration logic.
+4. **`src/core/SprintOrchestrator` & `PlannerOrchestrator`**: The business logic of the app, running loops and coordinating state and I/O.
 
 ### The Loop
 1. **Initialization:** The CLI initializes the modules and either fetches **Features** from a **FeatureSource** or runs the **Planner** to generate the **Blueprint**.

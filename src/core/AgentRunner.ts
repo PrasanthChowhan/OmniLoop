@@ -64,7 +64,7 @@ export class CliAgentRunner implements AgentRunner {
       systemPrompt = `=== SYSTEM PROMPT ===\n${systemPrompt}\n\n=== CURRENT TASK ===\n${message}`;
     }
 
-    const { resolvePrompt } = require('./PromptResolver');
+    const { resolvePrompt } = require('../utils/PromptResolver');
     const finalPromptText = resolvePrompt(systemPrompt, task.promptArgs || {}, process.cwd());
 
     const agentName = role;
