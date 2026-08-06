@@ -14,7 +14,7 @@ import { PlannerOrchestrator } from './core/PlannerOrchestrator';
 import { Logger } from './utils/logger';
 
 const SCRIPT_DIR = path.resolve(__dirname, '..');
-const PROMPTS_DIR = path.join(SCRIPT_DIR, '.omniloop');
+const PROMPTS_DIR = path.join(SCRIPT_DIR, 'src', 'prompts');
 const MAX_CYCLES = 3;
 
 async function main() {
