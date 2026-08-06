@@ -57,14 +57,14 @@ export class SprintOrchestrator {
         }
 
         Logger.info('Running Contractor...');
-        agentRunner.runAgent(
+        await agentRunner.runAgent(
           'contractor',
           { contextStr: contractContext },
           { goal: `Create a contract for: ${feature.description}`, featureId, cycle: contractCycle }
         );
 
         Logger.info('Running Reviewer...');
-        agentRunner.runAgent(
+        await agentRunner.runAgent(
           'reviewer',
           { contextStr: contractContext },
           { goal: `Review the contract for: ${feature.description}`, featureId, cycle: contractCycle }
@@ -116,7 +116,7 @@ export class SprintOrchestrator {
       };
 
       Logger.info('Running Generator...');
-      const success = agentRunner.runAgent(
+      const { success } = await agentRunner.runAgent(
         'generator',
         { contextStr: generatorContext },
         { goal: `Focus on this feature: ${feature.description}`, featureId, cycle, promptArgs }
@@ -151,7 +151,7 @@ export class SprintOrchestrator {
         Logger.info('Performing Meta-Evaluation Chaos Test...');
         const bugFile = injectBug();
         if (bugFile) {
-          agentRunner.runAgent(
+          await agentRunner.runAgent(
             'evaluator',
             { contextStr: evaluatorContext },
             { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
@@ -181,7 +181,7 @@ export class SprintOrchestrator {
       }
 
       Logger.info('Running Evaluator (Real)...');
-      agentRunner.runAgent(
+      await agentRunner.runAgent(
         'evaluator',
         { contextStr: evaluatorContext },
         { goal: `Evaluate this feature: ${feature.description}`, featureId, cycle, promptArgs: evaluatorPromptArgs }
